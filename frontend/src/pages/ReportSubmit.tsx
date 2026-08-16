@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapTheme, MapThemeToggle } from '../components/map/MapThemeContext';
+import { getCitizenToken } from '../utils/auth';
 
 export default function ReportSubmit({ 
   reportData, 
@@ -30,10 +31,16 @@ export default function ReportSubmit({
       return;
     }
 
+    const token = getCitizenToken();
+    if (!token || token.length !== 40) {
+      setError("Authentication error. Please sign in again.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
-    const result = await submitIncident(reportData as ReportData);
+    const result = await submitIncident(reportData as ReportData, token);
 
     setIsSubmitting(false);
 

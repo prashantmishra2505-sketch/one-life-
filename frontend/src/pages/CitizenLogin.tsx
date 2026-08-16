@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { loginCitizen, registerCitizen } from '../services/api';
 import { setCitizenAuth } from '../utils/auth';
 
 export default function CitizenLogin({ 
@@ -59,17 +60,25 @@ export default function CitizenLogin({
     setIsAuthenticating(true);
     setError(null);
 
-    // Mock Authentication Delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    setIsAuthenticating(false);
-
-    // Mark as authenticated in frontend session storage
-    // Generate a unique citizen ID for the session
-    const uniqueId = `CIT-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`;
-    setCitizenAuth(uniqueId);
-    
-    onLoginSuccess();
+    if (isRegistering) {
+      const result = await registerCitizen({ name: fullName, email, password });
+      setIsAuthenticating(false);
+      if (result.success && result.token && result.user) {
+        setCitizenAuth(result.user.id, result.token);
+        onLoginSuccess();
+      } else {
+        setError(result.error || 'Registration failed.');
+      }
+    } else {
+      const result = await loginCitizen({ email, password });
+      setIsAuthenticating(false);
+      if (result.success && result.token && result.user) {
+        setCitizenAuth(result.user.id, result.token);
+        onLoginSuccess();
+      } else {
+        setError(result.error || 'Invalid credentials.');
+      }
+    }
   };
 
   return (

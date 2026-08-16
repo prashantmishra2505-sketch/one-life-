@@ -36,7 +36,7 @@ class SOSDispatchView(APIView):
         
         # 4. Mock Twilio SMS Dispatch
         print("\n" + "="*40)
-        print("📲 MOCK TWILIO SMS DISPATCH")
+        print("MOCK TWILIO SMS DISPATCH")
         print(f"To: {nearest_unit.name} ({nearest_unit.phone})")
         print(f"Message: URGENT! Incident '{incident.title}' reported at Lat: {incident.latitude}, Lon: {incident.longitude}. Risk Score: {incident.risk_score}")
         print("="*40 + "\n")

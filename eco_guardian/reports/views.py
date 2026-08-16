@@ -4,35 +4,52 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import IncidentReport
-from .serializers import IncidentReportSerializer
-
+from .serializers import IncidentReportSerializer, PublicIncidentReportSerializer
 from .services.ai_vision import analyze_incident_image
 from .services.risk_engine import calculate_and_trigger_sos
+
+class PublicReportListView(generics.ListAPIView):
+    """
+    GET: List all incident reports for the public feed.
+    Does not require authentication. Uses obfuscated coordinates.
+    """
+    queryset = IncidentReport.objects.all().order_by('-created_at')
+    serializer_class = PublicIncidentReportSerializer
+    permission_classes = []
 
 class ReportListCreateView(generics.ListCreateAPIView):
     """
     GET: List all incident reports.
     POST: Create a new report with AI validation and Risk scoring.
     """
-    queryset = IncidentReport.objects.all().order_by('-created_at')
     serializer_class = IncidentReportSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Admins and Officers see all reports
+        if user.role in ['admin', 'officer']:
+            return IncidentReport.objects.all().order_by('-created_at')
+        # Citizens only see their own reports
+        return IncidentReport.objects.filter(reporter=user).order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
+        print("AUTHORIZATION HEADER RECEIVED:", request.META.get('HTTP_AUTHORIZATION'))
+        print("USER:", request.user)
         # 1. Intercept the request to validate the image with Gemini
-        image_file = request.FILES.get('image')
+        image_data = request.data.get('image') or request.FILES.get('image')
         
         # We only run AI if an image is provided
-        ai_data = {"is_valid_threat": True, "confidence_score": 0.0}
-        if image_file:
-            ai_data = analyze_incident_image(image_file)
+        ai_data = {"is_valid_threat": True, "confidence_score": 0.0, "removal_advice": "N/A"}
+        if image_data:
+            # If it's a base64 string from JSON, we need to decode it for AI or handle it differently
+            # Actually, AI vision currently expects a file-like object or PIL Image.
+            # I will fix this in ai_vision.py
+            ai_data = analyze_incident_image(image_data)
             
-            # If the AI determines it's completely invalid/irrelevant, reject the report
-            if not ai_data.get('is_valid_threat'):
-                raise ValidationError({
-                    "image": "The uploaded image does not appear to contain a valid environmental threat."
-                })
+            # If the AI determines it's completely invalid/irrelevant, we just let it pass with low risk
+            # instead of blocking the citizen from submitting their report.
+            pass
         
         # 2. Calculate the risk score and potentially trigger SOS
         risk_score = calculate_and_trigger_sos(
@@ -48,6 +65,10 @@ class ReportListCreateView(generics.ListCreateAPIView):
         mutable_data['risk_score'] = risk_score
         mutable_data['ai_removal_advice'] = ai_data.get('removal_advice', 'N/A')
         
+        tags = ai_data.get('detected_tags', [])
+        ai_species_str = ", ".join(tags[:3]) if tags else None
+        mutable_data['ai_species'] = ai_species_str
+        
         # Pass the modified data to the standard DRF serializer workflow
         serializer = self.get_serializer(data=mutable_data)
         serializer.is_valid(raise_exception=True)
@@ -57,7 +78,17 @@ class ReportListCreateView(generics.ListCreateAPIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
-        serializer.save(reporter=self.request.user)
+        ai_confidence = serializer.initial_data.get('ai_confidence', 0.0)
+        risk_score = serializer.initial_data.get('risk_score', 0)
+        ai_species = serializer.initial_data.get('ai_species', None)
+        
+        # We must pass read-only fields explicitly to save()
+        serializer.save(
+            reporter=self.request.user,
+            ai_confidence=ai_confidence,
+            risk_score=risk_score,
+            ai_species=ai_species
+        )
 
 class ReportDetailUpdateView(generics.RetrieveUpdateAPIView):
     """

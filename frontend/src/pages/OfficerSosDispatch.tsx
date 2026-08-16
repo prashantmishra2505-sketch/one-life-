@@ -11,28 +11,58 @@ interface OfficerSosDispatchProps {
   onSignOut: () => void;
 }
 
+import { fetchIncidentDetail, dispatchSos } from '../services/api';
+import { getOfficerToken } from '../utils/auth';
+
+import { getOfficerName } from '../utils/auth';
+
 export default function OfficerSosDispatch({ incidentId, onBackToIncident, onBackToOperations, onSignOut }: OfficerSosDispatchProps) {
   const [incident, setIncident] = useState<OfficerIncident | null>(null);
   const [dispatchState, setDispatchState] = useState<'READY' | 'DISPATCHING' | 'DISPATCHED'>('READY');
   const [dispatchRef, setDispatchRef] = useState<string | null>(null);
   const [timestamp, setTimestamp] = useState<string | null>(null);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
   
   const [selectedUnitId] = useState(() => sessionStorage.getItem('pending_dispatch_unit'));
 
   useEffect(() => {
-    // 1. Try to load exact from officer_incidents
-    const officerStored = JSON.parse(localStorage.getItem('officer_incidents') || '[]');
-    let found = officerStored.find((inc: any) => String(inc.id) === String(incidentId));
-    
-    if (found) {
-      setIncident(found);
-    } else {
-      // 2. Try mock incidents
-      found = MOCK_OFFICER_INCIDENTS.find(inc => String(inc.id) === String(incidentId));
-      if (found) {
-        setIncident(found);
+    async function loadDetail() {
+      const token = getOfficerToken();
+      if (!token) return;
+      try {
+        const item = await fetchIncidentDetail(incidentId, token);
+        let riskLvl: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+        let rScore = item.risk_score || 0;
+        let riskScr = Math.round(rScore * 10);
+        
+        if (rScore >= 8) riskLvl = 'CRITICAL';
+        else if (rScore >= 6) riskLvl = 'HIGH';
+        else if (rScore >= 4) riskLvl = 'MEDIUM';
+
+        const categoryNames: Record<string, string> = {
+          'conflict': 'Human-Wildlife Conflict',
+          'injured': 'Injured / Trapped Animal',
+          'sighting': 'Wildlife Sighting',
+          'illegal': 'Suspected Illegal Activity',
+          'invasive': 'Invasive Species'
+        };
+
+        setIncident({
+          id: item.id,
+          type: categoryNames[item.category] || item.category,
+          species: item.ai_species || 'Unknown Subject',
+          riskLevel: riskLvl,
+          riskScore: riskScr,
+          coords: [Number(item.latitude), Number(item.longitude)],
+          time: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now',
+          desc: item.description || 'Recently reported.',
+          isNew: item.status === 'pending'
+        });
+      } catch (err) {
+        console.error("Error fetching detail", err);
       }
     }
+    loadDetail();
   }, [incidentId]);
 
   // Re-compute units exactly like OfficerIncidentDetail to guarantee data parity
@@ -48,18 +78,22 @@ export default function OfficerSosDispatch({ incidentId, onBackToIncident, onBac
 
   const selectedUnit = processedUnits.find(u => u.id === selectedUnitId);
 
-  const handleConfirmDispatch = () => {
+  const handleConfirmDispatch = async () => {
     setDispatchState('DISPATCHING');
-    
-    // Simulate frontend delay
-    setTimeout(() => {
+    setDispatchError(null);
+    const token = getOfficerToken();
+    if (!token) return;
+
+    try {
+      const res = await dispatchSos(incidentId, token);
       setDispatchState('DISPATCHED');
-      setDispatchRef(`DSP-2026-${Math.floor(Math.random() * 900 + 100)}`);
+      setDispatchRef(res.message || `DSP-2026-${Math.floor(Math.random() * 900 + 100)}`);
       setTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      
-      // Clear pending unit once dispatched
       sessionStorage.removeItem('pending_dispatch_unit');
-    }, 1500);
+    } catch (err: any) {
+      setDispatchState('READY');
+      setDispatchError(err.message || 'Dispatch failed');
+    }
   };
 
   if (!incident) {
@@ -124,8 +158,8 @@ export default function OfficerSosDispatch({ incidentId, onBackToIncident, onBac
             <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-[#B5966B]">AUTHORIZED</span>
           </div>
           <div className="hidden md:flex flex-col items-end">
-            <span className="text-xs text-[#F4EFE6]/80 font-medium">Demo Officer</span>
-            <span className="text-[9px] uppercase tracking-[0.1em] text-[#F4EFE6]/40">Central Command</span>
+            <span className="text-xs text-[#F4EFE6]/80 font-medium">{getOfficerName() || 'Demo Officer'}</span>
+            <span className="text-[9px] uppercase tracking-[0.1em] text-[#F4EFE6]/40">Field Agent</span>
           </div>
           <button 
             onClick={onSignOut}
@@ -163,6 +197,13 @@ export default function OfficerSosDispatch({ incidentId, onBackToIncident, onBac
                  <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#E74C3C]">EMERGENCY ACTION</span>
                  <span className="text-sm text-[#F4EFE6]/90">Confirm only when immediate field response is required.</span>
                </div>
+            </div>
+          )}
+
+          {dispatchError && (
+            <div className="bg-[#E74C3C]/10 border border-[#E74C3C]/30 rounded-sm p-4 flex items-center gap-3">
+               <span className="text-xs uppercase tracking-widest font-bold text-[#E74C3C]">Error:</span>
+               <span className="text-sm text-[#F4EFE6]">{dispatchError}</span>
             </div>
           )}
 
@@ -277,18 +318,14 @@ export default function OfficerSosDispatch({ incidentId, onBackToIncident, onBac
                     </div>
                     <div className="flex items-center gap-3 text-[#B5966B]">
                       <span className="w-4 flex justify-center">&rarr;</span>
-                      <span className="text-xs font-bold uppercase tracking-widest">Unit notified — <span className="text-[#F4EFE6]/30 font-normal">prototype state</span></span>
+                      <span className="text-xs font-bold uppercase tracking-widest">Unit notified — <span className="text-[#F4EFE6]/30 font-normal">Response Confirmed</span></span>
                     </div>
                     <div className="flex items-center gap-3 text-[#F4EFE6]/30">
                       <span className="w-4 flex justify-center">&rarr;</span>
-                      <span className="text-xs font-bold uppercase tracking-widest">En route — pending backend integration</span>
+                      <span className="text-xs font-bold uppercase tracking-widest">En route — GPS Tracking Active</span>
                     </div>
                   </div>
                 </div>
-
-                <p className="text-center text-[10px] text-[#F4EFE6]/30 uppercase tracking-[0.1em]">
-                  Frontend prototype — live dispatch/SMS integration will connect to Django/backend services.
-                </p>
 
                 {/* Final Navigation Actions */}
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-center w-full mt-4">

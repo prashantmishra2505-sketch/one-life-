@@ -29,7 +29,7 @@ def trigger_sos_alert(title, lat, lon, score):
     Mock function representing an SOS trigger (e.g., Twilio SMS or Email).
     """
     print("=" * 50)
-    print(f"🚨 CRITICAL SOS ALERT TRIGGERED 🚨")
+    print(f"!!! CRITICAL SOS ALERT TRIGGERED !!!")
     print(f"Threat: {title}")
     print(f"Location: Lat {lat}, Lon {lon}")
     print(f"Risk Score: {score}/10")

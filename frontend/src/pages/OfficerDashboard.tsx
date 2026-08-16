@@ -6,44 +6,59 @@ import { useMapTheme, MapThemeToggle } from '../components/map/MapThemeContext';
 import type { OfficerIncident } from '../data/mockIncidents';
 import { MOCK_OFFICER_INCIDENTS } from '../data/mockIncidents';
 
+import { getOfficerToken } from '../utils/auth';
+import { fetchDashboard } from '../services/api';
+
+import { getOfficerName } from '../utils/auth';
+
 export default function OfficerDashboard({ onSignOut, onIncidentClick }: { onSignOut: () => void, onIncidentClick: (id: string | number) => void }) {
-  const [incidents, setIncidents] = useState<OfficerIncident[]>(MOCK_OFFICER_INCIDENTS);
+  const [incidents, setIncidents] = useState<OfficerIncident[]>([]);
   const [hoveredIncidentId, setHoveredIncidentId] = useState<string | number | null>(null);
   const { tileUrl, mapClassName } = useMapTheme();
 
   useEffect(() => {
-    // Load exactly captured new incidents from the session/local storage
-    const stored = JSON.parse(localStorage.getItem('officer_incidents') || '[]');
-    if (stored.length > 0) {
-      const parsedStored: OfficerIncident[] = stored.map((item: any) => {
-        let riskLvl: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'MEDIUM';
-        let riskScr = 50;
-        
-        if (item.type === 'Conflict' || item.type === 'Human-Wildlife Conflict') {
-          riskLvl = 'HIGH';
-          riskScr = 85;
-        } else if (item.type === 'SOS') {
-          riskLvl = 'CRITICAL';
-          riskScr = 99;
-        } else if (item.type === 'Observation') {
-          riskLvl = 'LOW';
-          riskScr = 20;
-        }
+    async function loadIncidents() {
+      const token = getOfficerToken();
+      if (!token) return;
+      try {
+        const data = await fetchDashboard(token);
+        const parsed: OfficerIncident[] = data.map((item: any) => {
+          let riskLvl: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+          let rScore = item.risk_score || 0;
+          let riskScr = Math.round(rScore * 10);
+          
+          if (rScore >= 8) riskLvl = 'CRITICAL';
+          else if (rScore >= 6) riskLvl = 'HIGH';
+          else if (rScore >= 4) riskLvl = 'MEDIUM';
 
-        return {
-          id: item.id,
-          type: item.type === 'Conflict' ? 'Human-Wildlife Conflict' : item.type === 'Observation' ? 'Wildlife Sighting' : item.type,
-          species: item.species || 'Pending Assessment',
-          riskLevel: riskLvl,
-          riskScore: riskScr,
-          coords: item.coords,
-          time: item.time || 'Just now',
-          desc: item.desc || 'Recently reported. Status: RECEIVED',
-          isNew: item.isNew
-        };
-      });
-      setIncidents([...parsedStored, ...MOCK_OFFICER_INCIDENTS]);
+          const categoryNames: Record<string, string> = {
+            'conflict': 'Human-Wildlife Conflict',
+            'injured': 'Injured / Trapped Animal',
+            'sighting': 'Wildlife Sighting',
+            'illegal': 'Suspected Illegal Activity',
+            'invasive': 'Invasive Species'
+          };
+
+          return {
+            id: item.id,
+            type: categoryNames[item.category] || item.category,
+            species: item.ai_species || 'Unknown Subject',
+            riskLevel: riskLvl,
+            riskScore: riskScr,
+            coords: [Number(item.latitude), Number(item.longitude)],
+            time: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now',
+            desc: item.description || 'Recently reported. Status: RECEIVED',
+            isNew: item.status === 'pending'
+          };
+        });
+        setIncidents(parsed);
+      } catch (err) {
+        console.error("Error fetching dashboard data", err);
+      }
     }
+    loadIncidents();
+    const interval = setInterval(loadIncidents, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const sortedIncidents = useMemo(() => {
@@ -84,9 +99,18 @@ export default function OfficerDashboard({ onSignOut, onIncidentClick }: { onSig
             <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-[#B5966B]">AUTHORIZED</span>
           </div>
           <div className="hidden md:flex flex-col items-end">
-            <span className="text-xs text-[#F4EFE6]/80 font-medium">Demo Officer</span>
-            <span className="text-[9px] uppercase tracking-[0.1em] text-[#F4EFE6]/40">Central Command</span>
+            <span className="text-xs text-[#F4EFE6]/80 font-medium">{getOfficerName() || 'Demo Officer'}</span>
+            <span className="text-[9px] uppercase tracking-[0.1em] text-[#F4EFE6]/40">Field Agent</span>
           </div>
+          <button 
+            onClick={() => window.location.hash = '/report'}
+            className="hidden md:flex items-center gap-2 px-4 py-2 bg-[#F4EFE6] text-[#08150C] rounded-sm transition-colors hover:bg-[#EAE0CC]"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">FILE REPORT</span>
+          </button>
           <button 
             onClick={onSignOut}
             className="text-[10px] tracking-[0.2em] font-bold uppercase text-[#E74C3C]/80 hover:text-[#E74C3C] transition-colors focus-visible:outline-none focus-visible:underline p-1"

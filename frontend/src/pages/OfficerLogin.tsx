@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { loginOfficer } from '../services/api';
+import { loginOfficer, registerOfficer } from '../services/api';
+import { setOfficerAuth } from '../utils/auth';
 
 export default function OfficerLogin({ 
   onLoginSuccess, 
@@ -54,15 +55,18 @@ export default function OfficerLogin({
     setError(null);
 
     if (isRegistering) {
-      // Mock registration
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const result = await registerOfficer({ name: fullName, email, password });
       setIsAuthenticating(false);
-      setIsPendingVerification(true);
+      if (result.success) {
+        setIsPendingVerification(true);
+      } else {
+        setError(result.error || 'Registration failed.');
+      }
     } else {
       const result = await loginOfficer({ email, password });
       setIsAuthenticating(false);
-      if (result.success) {
-        sessionStorage.setItem('officer_authenticated', 'true');
+      if (result.success && result.token && result.user) {
+        setOfficerAuth(result.user.id, result.token, result.user.name);
         onLoginSuccess();
       } else {
         setError(result.error || 'Invalid officer credentials.');

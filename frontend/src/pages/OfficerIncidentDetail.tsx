@@ -15,42 +15,71 @@ interface IncidentDetailProps {
   onContinueToSos?: (incidentId: string, unitId: string) => void;
 }
 
+import { fetchIncidentDetail, updateIncidentStatus } from '../services/api';
+import { getOfficerToken } from '../utils/auth';
+
+import { getOfficerName } from '../utils/auth';
+
 export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, onContinueToSos }: IncidentDetailProps) {
   const [incident, setIncident] = useState<OfficerIncident | null>(null);
   const [evidenceImage, setEvidenceImage] = useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [status, setStatus] = useState<'NEW' | 'PENDING ASSESSMENT' | 'ACKNOWLEDGED' | 'IN PROGRESS' | 'RESOLVED'>('NEW');
   const [dispatchState, setDispatchState] = useState<'IDLE' | 'READY'>('IDLE');
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const { tileUrl, mapClassName } = useMapTheme();
 
   useEffect(() => {
-    // 1. Try to load exact from officer_incidents
-    const officerStored = JSON.parse(localStorage.getItem('officer_incidents') || '[]');
-    let found = officerStored.find((inc: any) => String(inc.id) === String(incidentId));
-    
-    if (found) {
-      setIncident(found);
-      if (found.isNew) setStatus('PENDING ASSESSMENT');
-      
-      // Load evidence image if it exists in the officer incident
-      if (found.evidenceImage) {
-        setEvidenceImage(found.evidenceImage);
-      } else {
-        setEvidenceImage(null);
-      }
-    } else {
-      // 2. Try mock incidents
-      found = MOCK_OFFICER_INCIDENTS.find(inc => String(inc.id) === String(incidentId));
-      if (found) {
-        setIncident(found);
-        setStatus('NEW');
-        if (found.id === 'INC-2026-616') {
-          setEvidenceImage('/images/camera-demo-wildlife.png'); // Demo leopard image
-        } else {
-          setEvidenceImage(null);
-        }
+    async function loadDetail() {
+      const token = getOfficerToken();
+      if (!token) return;
+      try {
+        const item = await fetchIncidentDetail(incidentId, token);
+        let riskLvl: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+        let rScore = item.risk_score || 0;
+        let riskScr = Math.round(rScore * 10);
+        
+        if (rScore >= 8) riskLvl = 'CRITICAL';
+        else if (rScore >= 6) riskLvl = 'HIGH';
+        else if (rScore >= 4) riskLvl = 'MEDIUM';
+
+        const categoryNames: Record<string, string> = {
+          'conflict': 'Human-Wildlife Conflict',
+          'injured': 'Injured / Trapped Animal',
+          'sighting': 'Wildlife Sighting',
+          'illegal': 'Suspected Illegal Activity',
+          'invasive': 'Invasive Species'
+        };
+
+        setIncident({
+          id: item.id,
+          type: categoryNames[item.category] || item.category,
+          species: item.ai_species || 'Unknown Subject',
+          riskLevel: riskLvl,
+          riskScore: riskScr,
+          coords: [Number(item.latitude), Number(item.longitude)],
+          time: new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now',
+          desc: item.description || 'Recently reported.',
+          isNew: item.status === 'pending'
+        });
+        
+        if (item.status === 'pending') setStatus('PENDING ASSESSMENT');
+        else if (item.status === 'investigating') setStatus('ACKNOWLEDGED');
+        else if (item.status === 'resolved') setStatus('RESOLVED');
+        else setStatus('NEW');
+
+        if (item.image) setEvidenceImage(item.image);
+        
+        setAiAnalysis({
+          confidence: item.ai_confidence,
+          removal_advice: item.ai_removal_advice
+        });
+
+      } catch (err) {
+        console.error("Error fetching detail", err);
       }
     }
+    loadDetail();
   }, [incidentId]);
 
   // Compute and sort response units
@@ -80,6 +109,18 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
       }
     }
   }, [processedUnits, selectedUnitId]);
+
+  const handleStatusChange = async (newStatus: 'investigating' | 'resolved') => {
+    const token = getOfficerToken();
+    if (!token) return;
+    try {
+      await updateIncidentStatus(incidentId, newStatus, token);
+      setStatus(newStatus === 'investigating' ? 'ACKNOWLEDGED' : 'RESOLVED');
+    } catch (err) {
+      console.error('Failed to update status', err);
+      alert('Failed to update status. Please try again.');
+    }
+  };
 
   if (!incident) {
     return (
@@ -131,8 +172,8 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
             <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-[#B5966B]">AUTHORIZED</span>
           </div>
           <div className="hidden md:flex flex-col items-end">
-            <span className="text-xs text-[#F4EFE6]/80 font-medium">Demo Officer</span>
-            <span className="text-[9px] uppercase tracking-[0.1em] text-[#F4EFE6]/40">Central Command</span>
+            <span className="text-xs text-[#F4EFE6]/80 font-medium">{getOfficerName() || 'Demo Officer'}</span>
+            <span className="text-[9px] uppercase tracking-[0.1em] text-[#F4EFE6]/40">Field Agent</span>
           </div>
           <button 
             onClick={onSignOut}
@@ -227,18 +268,22 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
                
                {status === 'NEW' || status === 'PENDING ASSESSMENT' ? (
                  <button 
-                  onClick={() => setStatus('ACKNOWLEDGED')}
+                  onClick={() => handleStatusChange('investigating')}
                   className="w-full py-4 bg-[#F4EFE6] text-[#08150C] text-[11px] font-bold uppercase tracking-[0.2em] rounded-sm hover:bg-[#EAE0CC] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B5966B]"
                 >
                   ACKNOWLEDGE INCIDENT
                 </button>
-               ) : (
+               ) : status === 'ACKNOWLEDGED' || status === 'IN PROGRESS' ? (
                  <button 
-                  onClick={() => setStatus('RESOLVED')}
+                  onClick={() => handleStatusChange('resolved')}
                   className="w-full py-4 bg-[#18261C] border border-[#F4EFE6]/20 text-[#F4EFE6] text-[11px] font-bold uppercase tracking-[0.2em] rounded-sm hover:bg-[#1C2C21] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B5966B]"
                 >
                   MARK AS RESOLVED
                 </button>
+               ) : (
+                 <div className="w-full py-4 bg-[#5E7A63]/20 border border-[#5E7A63]/50 text-[#5E7A63] text-center text-[11px] font-bold uppercase tracking-[0.2em] rounded-sm">
+                   INCIDENT RESOLVED
+                 </div>
                )}
 
                {dispatchState === 'IDLE' ? (

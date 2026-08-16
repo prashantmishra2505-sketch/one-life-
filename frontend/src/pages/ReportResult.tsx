@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { fetchIncidentDetail } from '../services/api';
 import type { ReportData } from '../services/api';
+import { getCitizenToken, getOfficerToken } from '../utils/auth';
 
 export interface AIAnalysis {
   species: string;
@@ -28,31 +30,56 @@ export default function ReportResult({
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
 
   useEffect(() => {
-    // Generate mock analysis data
-    const mockAnalysis: AIAnalysis = {
-      species: 'Leopard (Panthera pardus)',
-      incidentType: reportData.category === 'conflict' ? 'Human-Wildlife Conflict' : 'Wildlife Sighting',
-      severity: 'HIGH',
-      confidence: 87,
-      reasoning: 'Possible large carnivore presence near a populated area, combined with the submitted description, indicates elevated human-wildlife conflict risk.',
-      recommendedAction: 'Immediate responder review recommended.',
-      explanationPoints: [
-        'Species characteristics visible in the submitted evidence',
-        'Context from the incident description',
-        'Human proximity indicated by the report',
-        'Environmental context matches typical habitat'
-      ],
-      riskScore: 86,
-      riskBand: 'HIGH',
-      riskFactors: [
-        'Species risk (Apex predator)',
-        'Incident type (Conflict)',
-        'Human proximity (High)'
-      ]
-    };
-    
-    setAnalysis(mockAnalysis);
-  }, [reportData.category]);
+    async function loadData() {
+      if (!incidentId) return;
+      const token = getCitizenToken() || getOfficerToken();
+      if (!token) return;
+      try {
+        const incident = await fetchIncidentDetail(incidentId, token);
+        const confidenceValue = incident.ai_confidence ? parseFloat(incident.ai_confidence) : 0;
+        const confidencePct = Math.round(confidenceValue * 100);
+        const rScore = incident.risk_score || 0;
+        let riskBand: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+        if (rScore >= 8) riskBand = 'CRITICAL';
+        else if (rScore >= 6) riskBand = 'HIGH';
+        else if (rScore >= 4) riskBand = 'MEDIUM';
+
+        const categoryNames: Record<string, string> = {
+          'conflict': 'Human-Wildlife Conflict',
+          'injured': 'Injured / Trapped Animal',
+          'sighting': 'Wildlife Sighting',
+          'illegal': 'Suspected Illegal Activity',
+          'invasive': 'Invasive Species'
+        };
+
+        const analysisData: AIAnalysis = {
+          species: incident.ai_species || (incident.category === 'invasive' ? 'Invasive Species' : (categoryNames[incident.category] || 'Unknown Subject')),
+          incidentType: categoryNames[incident.category] || incident.category || 'Environmental Report',
+          severity: riskBand,
+          confidence: confidencePct,
+          reasoning: incident.ai_removal_advice && incident.ai_removal_advice !== 'N/A' 
+                     ? incident.ai_removal_advice 
+                     : 'AI assessment complete. Evaluated based on visual evidence and context.',
+          recommendedAction: riskBand === 'CRITICAL' || riskBand === 'HIGH' ? 'Immediate responder review recommended.' : 'Standard operating procedure review.',
+          explanationPoints: [
+            'Visual evidence parsed by AI models',
+            'Context matching with report details',
+            `Calculated Confidence: ${confidencePct}%`
+          ],
+          riskScore: rScore * 10,
+          riskBand: riskBand,
+          riskFactors: [
+            `Reported Category: ${categoryNames[incident.category] || incident.category}`,
+            `AI Risk Level: ${riskBand}`
+          ]
+        };
+        setAnalysis(analysisData);
+      } catch (e) {
+        console.error("Failed to load real AI data", e);
+      }
+    }
+    loadData();
+  }, [incidentId, reportData.category]);
 
   if (!analysis) return null;
 

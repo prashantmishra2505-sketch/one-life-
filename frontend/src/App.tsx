@@ -13,8 +13,11 @@ import OfficerIncidentDetail from './pages/OfficerIncidentDetail'
 import OfficerSosDispatch from './pages/OfficerSosDispatch'
 import CitizenLogin from './pages/CitizenLogin'
 import CitizenProfile from './pages/CitizenProfile'
+import AdminLogin from './pages/AdminLogin'
+import AdminPortal from './pages/AdminPortal'
+import { submitIncident } from './services/api'
 import type { ReportData } from './services/api'
-import { getCitizenId, clearCitizenAuth, useCitizenAuth } from './utils/auth'
+import { getCitizenId, clearCitizenAuth, useCitizenAuth, getCitizenToken, getOfficerToken } from './utils/auth'
 
 function App() {
   const [route, setRoute] = useState(() => window.location.hash.replace('#', '') || '/');
@@ -43,7 +46,9 @@ function App() {
   };
 
   if (route.startsWith('/report')) {
-    if (!isCitizenAuth) {
+    const citizenToken = getCitizenToken();
+    const officerToken = getOfficerToken();
+    if (!citizenToken && !officerToken) {
       sessionStorage.setItem('citizen_login_redirect', route);
       window.location.hash = '/citizen/login';
       return null;
@@ -57,8 +62,11 @@ function App() {
           onNext={(data) => {
             setReportData(prev => ({ ...prev, category: data.category, description: data.description }));
             navigate('/report/evidence');
+          }}
+          onCancel={() => { 
+            clearReportData(); 
+            navigate(getOfficerToken() ? '/officer' : '/'); 
           }} 
-          onCancel={() => { clearReportData(); navigate('/'); }} 
         />
       );
     }
@@ -72,7 +80,10 @@ function App() {
             navigate('/report/location');
           }} 
           onBack={() => navigate('/report')} 
-          onCancel={() => { clearReportData(); navigate('/'); }} 
+          onCancel={() => { 
+            clearReportData(); 
+            navigate(getOfficerToken() ? '/officer' : '/'); 
+          }} 
         />
       );
     }
@@ -86,7 +97,10 @@ function App() {
             navigate('/report/submit');
           }} 
           onBack={() => navigate('/report/evidence')} 
-          onCancel={() => { clearReportData(); navigate('/'); }} 
+          onCancel={() => { 
+            clearReportData(); 
+            navigate(getOfficerToken() ? '/officer' : '/'); 
+          }} 
         />
       );
     }
@@ -96,40 +110,28 @@ function App() {
         <ReportSubmit 
           reportData={reportData}
           onEdit={(path) => navigate(path)}
-          onCancel={() => { clearReportData(); navigate('/'); }}
-          onComplete={(id) => { 
-            // Store a coarse version of the report for the public map demo
-            const coarseLat = reportData.location?.lat ? parseFloat((reportData.location.lat + (Math.random() * 0.02 - 0.01)).toFixed(3)) : 22.5;
-            const coarseLng = reportData.location?.lng ? parseFloat((reportData.location.lng + (Math.random() * 0.02 - 0.01)).toFixed(3)) : 79.5;
-            const citizenId = getCitizenId() || 'CITIZEN-UNKNOWN';
-            
-            const newPublicIncident = {
-              id: id,
-              type: reportData.category === 'conflict' ? 'Conflict' : 'Observation',
-              species: 'Pending Assessment',
-              risk: 'Pending',
-              coords: [coarseLat, coarseLng],
-              time: 'Just now',
-              desc: 'Recently reported. Status: RECEIVED',
-              isNew: true,
-              citizenId: citizenId
-            };
-            
-            const existingPublic = JSON.parse(localStorage.getItem('public_incidents') || '[]');
-            localStorage.setItem('public_incidents', JSON.stringify([newPublicIncident, ...existingPublic]));
-            window.dispatchEvent(new Event('public_incidents_change'));
-
-            // Store EXACT version for the Officer Dashboard
-            const newOfficerIncident = {
-              ...newPublicIncident,
-              coords: [reportData.location?.lat || 22.5, reportData.location?.lng || 79.5],
-              evidenceImage: reportData.evidenceImage
-            };
-            const existingOfficer = JSON.parse(localStorage.getItem('officer_incidents') || '[]');
-            localStorage.setItem('officer_incidents', JSON.stringify([newOfficerIncident, ...existingOfficer]));
-
-            setIncidentId(id); 
-            navigate('/report/status'); 
+          onCancel={() => { 
+            clearReportData(); 
+            navigate(getOfficerToken() ? '/officer' : '/'); 
+          }}
+          onComplete={async () => {
+            const token = getCitizenToken() || getOfficerToken();
+            if (!token || token.length !== 40) {
+              sessionStorage.removeItem('citizen_token');
+              navigate('/citizen/login');
+              return;
+            }
+            try {
+              const res = await submitIncident(reportData as any, token);
+              if (res.success && res.incidentId) {
+                setIncidentId(res.incidentId);
+                navigate('/report/status');
+              } else {
+                alert(res.error || 'Failed to submit report');
+              }
+            } catch (err) {
+              alert('Network error submitting report');
+            }
           }}
         />
       );
@@ -151,13 +153,24 @@ function App() {
           reportData={reportData}
           incidentId={incidentId}
           onBack={() => navigate('/report/status')}
-          onNew={() => { clearReportData(); navigate('/report'); }}
+          onNew={() => { 
+            clearReportData(); 
+            if (getOfficerToken()) {
+              navigate('/officer');
+            } else {
+              navigate('/report'); 
+            }
+          }}
         />
       );
     }
   }
 
   if (route === '/citizen/login') {
+    if (isCitizenAuth) {
+      window.location.hash = '/profile';
+      return null;
+    }
     return (
       <CitizenLogin 
         onLoginSuccess={() => {
@@ -185,10 +198,39 @@ function App() {
       />
     );
   }
+  if (route === '/admin-login') {
+    return (
+      <AdminLogin 
+        onLoginSuccess={() => navigate('/admin-portal')}
+        onBack={() => navigate('/')}
+      />
+    );
+  }
+
+  if (route === '/admin-portal') {
+    const token = getOfficerToken();
+    if (!token || token.length !== 40) {
+      sessionStorage.removeItem('officer_token');
+      window.location.hash = '/admin-login';
+      return null;
+    }
+    return (
+      <AdminPortal 
+        onSignOut={() => {
+          sessionStorage.removeItem('officer_token');
+          navigate('/');
+        }}
+      />
+    );
+  }
 
   if (route === '/login') {
+    if (getOfficerToken()) {
+      window.location.hash = '/officer';
+      return null;
+    }
     return (
-      <OfficerLogin 
+      <OfficerLogin
         onLoginSuccess={() => navigate('/officer')}
         onBack={() => navigate('/')}
       />
@@ -196,15 +238,16 @@ function App() {
   }
 
   if (route === '/officer') {
-    const isAuthenticated = sessionStorage.getItem('officer_authenticated') === 'true';
-    if (!isAuthenticated) {
+    const token = getOfficerToken();
+    if (!token || token.length !== 40) {
+      sessionStorage.removeItem('officer_token');
       window.location.hash = '/login';
       return null;
     }
     return (
       <OfficerDashboard 
         onSignOut={() => {
-          sessionStorage.removeItem('officer_authenticated');
+          sessionStorage.removeItem('officer_token');
           navigate('/');
         }}
         onIncidentClick={(id) => navigate(`/officer/incidents/${id}`)}
@@ -213,8 +256,9 @@ function App() {
   }
 
   if (route.startsWith('/officer/incidents/')) {
-    const isAuthenticated = sessionStorage.getItem('officer_authenticated') === 'true';
-    if (!isAuthenticated) {
+    const token = getOfficerToken();
+    if (!token || token.length !== 40) {
+      sessionStorage.removeItem('officer_token');
       window.location.hash = '/login';
       return null;
     }
@@ -228,7 +272,7 @@ function App() {
           onBackToIncident={() => navigate(`/officer/incidents/${incidentId}`)}
           onBackToOperations={() => navigate('/officer')}
           onSignOut={() => {
-            sessionStorage.removeItem('officer_authenticated');
+            sessionStorage.removeItem('officer_token');
             navigate('/');
           }}
         />
@@ -240,7 +284,7 @@ function App() {
         incidentId={incidentId}
         onBack={() => navigate('/officer')}
         onSignOut={() => {
-          sessionStorage.removeItem('officer_authenticated');
+          sessionStorage.removeItem('officer_token');
           navigate('/');
         }}
         onContinueToSos={(id, unitId) => {
@@ -256,6 +300,7 @@ function App() {
       <Hero 
         onReportClick={() => navigate('/report')} 
         isCitizenAuth={isCitizenAuth}
+        isOfficerAuth={!!getOfficerToken()}
       />
       <IntelligenceExplorer />
     </div>

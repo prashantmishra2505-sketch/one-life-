@@ -1,6 +1,6 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.authtoken.models import Token
 from .serializers import RegisterSerializer, LoginSerializer, UserSerializer
 
@@ -31,3 +31,35 @@ class LoginView(generics.GenericAPIView):
             "user": UserSerializer(user).data,
             "token": token.key
         }, status=status.HTTP_200_OK)
+
+from .models import User
+
+class PendingOfficersView(generics.ListAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        return User.objects.filter(role='officer', verified=False)
+
+class ApproveOfficerView(generics.UpdateAPIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk, *args, **kwargs):
+        try:
+            user = User.objects.get(pk=pk, role='officer')
+            user.verified = True
+            user.save()
+            return Response({"status": "approved", "user_id": user.id}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "Officer not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class RejectOfficerView(generics.DestroyAPIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, pk, *args, **kwargs):
+        try:
+            user = User.objects.get(pk=pk, role='officer', verified=False)
+            user.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except User.DoesNotExist:
+            return Response({"error": "Officer not found"}, status=status.HTTP_404_NOT_FOUND)

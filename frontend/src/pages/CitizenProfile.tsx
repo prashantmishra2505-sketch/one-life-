@@ -28,30 +28,60 @@ export default function CitizenProfile({
   useEffect(() => {
     if (!citizenId) return;
 
-    const loadReports = () => {
-      // Load reports belonging to this citizen
-      const stored = localStorage.getItem('public_incidents');
-      if (stored) {
-        try {
-          const publicIncidents = JSON.parse(stored) as Incident[];
-          const myReports = publicIncidents.filter(inc => inc.citizenId === citizenId);
-          setReports(myReports);
-        } catch (e) {
-          console.error('Failed to parse public incidents', e);
-        }
+    const loadReports = async () => {
+      const token = sessionStorage.getItem('citizen_token');
+      if (!token) return;
+      try {
+        const response = await fetch('/api/reports/', {
+          headers: { 'Authorization': `Token ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch reports');
+        const data = await response.json();
+        
+        const myReports = data
+          .filter((item: any) => item.reporter === Number(citizenId))
+          .map((item: any) => {
+            const date = new Date(item.created_at);
+            const timeStr = isNaN(date.getTime()) ? 'Unknown Time' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            const categoryNames: Record<string, string> = {
+              'conflict': 'Human-Wildlife Conflict',
+              'injured': 'Injured / Trapped Animal',
+              'sighting': 'Wildlife Sighting',
+              'illegal': 'Suspected Illegal Activity',
+              'invasive': 'Invasive Species'
+            };
+
+            let riskStr = 'Unknown';
+            if (item.risk_score >= 8) riskStr = 'CRITICAL';
+            else if (item.risk_score >= 6) riskStr = 'HIGH';
+            else if (item.risk_score >= 4) riskStr = 'MEDIUM';
+            else riskStr = 'LOW';
+
+            return {
+              id: item.id,
+              type: categoryNames[item.category] || item.category,
+              species: item.ai_species || 'Unknown Subject',
+              risk: riskStr,
+              coords: [item.latitude, item.longitude],
+              time: timeStr,
+              desc: item.description,
+              region: 'Local Region',
+              citizenId: item.reporter.toString(),
+              statusLabel: item.status ? item.status.toUpperCase() : 'PENDING'
+            } as Incident;
+          });
+          
+        setReports(myReports);
+      } catch (e) {
+        console.error('Failed to load real incidents', e);
       }
     };
 
     loadReports();
-
-    const handleStorage = () => loadReports();
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('public_incidents_change', handleStorage);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('public_incidents_change', handleStorage);
-    };
+    // Refresh every 10 seconds to show updates
+    const interval = setInterval(loadReports, 10000);
+    return () => clearInterval(interval);
   }, [citizenId]);
 
   return (

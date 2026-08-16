@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapTheme, MapThemeToggle } from '../map/MapThemeContext';
+import { fetchPublicIncidents } from '../../services/api';
 
 interface Incident {
   id: string | number;
@@ -95,20 +96,26 @@ const IntelligenceExplorer = () => {
   const { tileUrl, mapClassName } = useMapTheme();
 
   useEffect(() => {
-    const stored = localStorage.getItem('public_incidents');
-    if (stored) {
+    const loadData = async () => {
       try {
-        const publicIncidents = JSON.parse(stored) as Incident[];
-        const enriched = publicIncidents.map(inc => ({
-          ...inc,
-          region: inc.region || 'Local Region',
-          type: inc.type === 'Conflict' ? 'Human-Wildlife Conflict' : inc.type === 'SOS' ? 'SOS Alert' : inc.type
+        const data = await fetchPublicIncidents();
+        const mapped = data.map((inc: any) => ({
+          id: inc.id,
+          type: inc.category === 'sos' ? 'SOS Alert' : inc.category === 'conflict' ? 'Human-Wildlife Conflict' : 'Observation',
+          species: inc.ai_species || 'Unknown Species',
+          risk: inc.risk_score > 75 ? 'Critical' : inc.risk_score > 50 ? 'High' : inc.risk_score > 25 ? 'Medium' : 'Low',
+          coords: [inc.latitude, inc.longitude],
+          time: new Date(inc.created_at).toLocaleDateString(),
+          desc: inc.description || 'Citizen Report',
+          region: 'Local Region',
+          statusLabel: inc.status.toUpperCase()
         }));
-        setIncidents([...enriched, ...MOCK_INCIDENTS]);
-      } catch (e) {
-        console.error('Failed to parse public incidents', e);
+        setIncidents(mapped.length > 0 ? mapped : MOCK_INCIDENTS);
+      } catch (err) {
+        console.error('Failed to fetch incidents', err);
       }
-    }
+    };
+    loadData();
   }, []);
 
   const filteredIncidents = useMemo(() => {
@@ -136,6 +143,16 @@ const IntelligenceExplorer = () => {
       return true;
     });
   }, [incidents, activeCategory, activeTime, searchQuery]);
+
+  // Calculate dynamic stats from all loaded incidents (not just filtered)
+  const stats = useMemo(() => {
+    return {
+      observations: incidents.filter(i => i.type === 'Observation' || i.type === 'Wildlife Sighting').length,
+      conflicts: incidents.filter(i => i.type.includes('Conflict')).length,
+      highRisk: incidents.filter(i => i.risk === 'High' || i.risk === 'Critical').length,
+      alerts: incidents.filter(i => i.type.includes('SOS')).length
+    };
+  }, [incidents]);
 
   const selectedIncident = useMemo(() => 
     incidents.find(inc => inc.id === selectedIncidentId) || null
@@ -177,19 +194,19 @@ const IntelligenceExplorer = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
           <div className="flex flex-col border-l-2 border-[#18261C]/20 pl-4">
             <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#18261C]/60 mb-1">Observations</span>
-            <span className="text-3xl font-serif text-[#18261C]">124</span>
+            <span className="text-3xl font-serif text-[#18261C]">{stats.observations}</span>
           </div>
           <div className="flex flex-col border-l-2 border-[#D35400]/40 pl-4">
             <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#D35400]/80 mb-1">Conflict Events</span>
-            <span className="text-3xl font-serif text-[#D35400]">18</span>
+            <span className="text-3xl font-serif text-[#D35400]">{stats.conflicts}</span>
           </div>
           <div className="flex flex-col border-l-2 border-[#E74C3C]/40 pl-4">
             <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#E74C3C]/80 mb-1">High-Risk Areas</span>
-            <span className="text-3xl font-serif text-[#E74C3C]">6</span>
+            <span className="text-3xl font-serif text-[#E74C3C]">{stats.highRisk}</span>
           </div>
           <div className="flex flex-col border-l-2 border-[#E74C3C] pl-4">
             <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#E74C3C] mb-1">Active Alerts</span>
-            <span className="text-3xl font-serif text-[#E74C3C] animate-pulse">3</span>
+            <span className="text-3xl font-serif text-[#E74C3C] animate-pulse">{stats.alerts}</span>
           </div>
         </div>
         </div>
@@ -320,7 +337,7 @@ const IntelligenceExplorer = () => {
                 <div>
                   <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-[#18261C]/50">STATUS</span>
                   <p className="text-xs font-medium text-[#18261C] mt-0.5">
-                    {selectedIncident.isNew ? 'Pending Assessment' : selectedIncident.type.includes('SOS') ? 'Active' : 'Resolved'}
+                    {selectedIncident.statusLabel || (selectedIncident.type.includes('SOS') ? 'ACTIVE' : 'RESOLVED')}
                   </p>
                 </div>
                 <div>

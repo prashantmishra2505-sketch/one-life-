@@ -70,7 +70,7 @@ export function MapThemeToggle() {
   const { theme, setTheme } = useMapTheme();
 
   return (
-    <div className="absolute top-4 right-4 z-[400] flex items-center bg-[#F4EFE6] border border-[#18261C]/20 rounded-sm overflow-hidden shadow-lg font-sans transition-colors">
+    <div className="absolute top-4 right-4 z-[1000] flex items-center bg-[#F4EFE6] border border-[#18261C]/20 rounded-sm overflow-hidden shadow-lg font-sans transition-colors">
       <button
         onClick={() => setTheme('light')}
         className={`px-3 py-1.5 text-[10px] uppercase tracking-widest font-bold flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:bg-black/5 ${

@@ -17,10 +17,11 @@ class IncidentReport(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
     CATEGORY_CHOICES = (
-        ('wildlife_crime', 'Wildlife Crime / Poaching'),
-        ('human_wildlife_conflict', 'Human-Wildlife Conflict'),
-        ('injured_animal', 'Injured Animal'),
-        ('invasive_species', 'Invasive Species'),
+        ('conflict', 'Human-Wildlife Conflict'),
+        ('injured', 'Injured / Trapped Animal'),
+        ('sighting', 'Wildlife Sighting'),
+        ('illegal', 'Suspected Illegal Activity'),
+        ('invasive', 'Invasive Species'),
         ('other', 'Other'),
     )
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='other')
@@ -29,6 +30,7 @@ class IncidentReport(models.Model):
     ai_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     risk_score = models.IntegerField(default=0)
     ai_removal_advice = models.TextField(null=True, blank=True)
+    ai_species = models.CharField(max_length=255, null=True, blank=True)
     
     SENSITIVITY_CHOICES = (
         ('low', 'Low'),

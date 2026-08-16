@@ -1,4 +1,4 @@
-const Hero = ({ onReportClick, isCitizenAuth }: { onReportClick?: () => void, isCitizenAuth?: boolean }) => {
+const Hero = ({ onReportClick, isCitizenAuth, isOfficerAuth }: { onReportClick?: () => void, isCitizenAuth?: boolean, isOfficerAuth?: boolean }) => {
   const handleExploreClick = (e: React.MouseEvent) => {
     e.preventDefault();
     const el = document.getElementById('intelligence');
@@ -71,20 +71,35 @@ const Hero = ({ onReportClick, isCitizenAuth }: { onReportClick?: () => void, is
             Intelligence
             <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
           </a>
-          <button onClick={() => window.location.hash = '/login'} className="relative group py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EAE0CC] rounded-sm transition-opacity hover:opacity-100 opacity-80 cursor-pointer uppercase text-[11px] tracking-[0.25em] font-semibold">
-            Operations
-            <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
-          </button>
-          {isCitizenAuth ? (
+          
+          {/* If they are an Officer, show Officer Dashboard */}
+          {isOfficerAuth && (
+            <button onClick={() => window.location.hash = '/officer'} className="relative group py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EAE0CC] rounded-sm transition-opacity hover:opacity-100 opacity-80 cursor-pointer uppercase text-[11px] tracking-[0.25em] font-semibold text-[#E74C3C]">
+              Officer Dashboard
+              <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
+            </button>
+          )}
+
+          {/* If they are a Citizen, show My Profile */}
+          {isCitizenAuth && (
             <button onClick={() => window.location.hash = '/profile'} className="relative group py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EAE0CC] rounded-sm transition-opacity hover:opacity-100 opacity-80 cursor-pointer uppercase text-[11px] tracking-[0.25em] font-semibold text-[#B5966B]">
               My Profile
               <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
             </button>
-          ) : (
-            <button onClick={() => window.location.hash = '/citizen/login'} className="relative group py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EAE0CC] rounded-sm transition-opacity hover:opacity-100 opacity-60 cursor-pointer uppercase text-[11px] tracking-[0.25em] font-semibold">
-              Sign In
-              <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
-            </button>
+          )}
+
+          {/* If they are NOT logged in, show the login links */}
+          {!isOfficerAuth && !isCitizenAuth && (
+            <>
+              <button onClick={() => window.location.hash = '/login'} className="relative group py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EAE0CC] rounded-sm transition-opacity hover:opacity-100 opacity-80 cursor-pointer uppercase text-[11px] tracking-[0.25em] font-semibold">
+                Operations
+                <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
+              </button>
+              <button onClick={() => window.location.hash = '/citizen/login'} className="relative group py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EAE0CC] rounded-sm transition-opacity hover:opacity-100 opacity-60 cursor-pointer uppercase text-[11px] tracking-[0.25em] font-semibold">
+                Sign In
+                <span className="absolute bottom-0 left-1/2 w-0 h-[1px] bg-[#EAE0CC] transition-all duration-300 ease-out group-hover:w-full group-hover:left-0 opacity-0 group-hover:opacity-100"></span>
+              </button>
+            </>
           )}
         </div>
       </nav>
