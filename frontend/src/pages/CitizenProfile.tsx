@@ -32,7 +32,8 @@ export default function CitizenProfile({
       const token = sessionStorage.getItem('citizen_token');
       if (!token) return;
       try {
-        const response = await fetch('/api/reports/', {
+        const API_URL = import.meta.env.VITE_API_URL || '';
+        const response = await fetch(`${API_URL}/api/reports/`, {
           headers: { 'Authorization': `Token ${token}` }
         });
         if (!response.ok) throw new Error('Failed to fetch reports');
