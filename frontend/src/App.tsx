@@ -17,7 +17,7 @@ import AdminLogin from './pages/AdminLogin'
 import AdminPortal from './pages/AdminPortal'
 import { submitIncident } from './services/api'
 import type { ReportData } from './services/api'
-import { getCitizenId, clearCitizenAuth, useCitizenAuth, getCitizenToken, getOfficerToken } from './utils/auth'
+import { clearCitizenAuth, useCitizenAuth, getCitizenToken, getOfficerToken } from './utils/auth'
 
 function App() {
   const [route, setRoute] = useState(() => window.location.hash.replace('#', '') || '/');

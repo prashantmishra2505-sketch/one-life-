@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapTheme, MapThemeToggle } from '../components/map/MapThemeContext';
 import type { OfficerIncident } from '../data/mockIncidents';
-import { MOCK_OFFICER_INCIDENTS } from '../data/mockIncidents';
+
 
 import { getOfficerToken } from '../utils/auth';
 import { fetchDashboard } from '../services/api';

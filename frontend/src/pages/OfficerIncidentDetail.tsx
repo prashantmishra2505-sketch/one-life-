@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapTheme, MapThemeToggle } from '../components/map/MapThemeContext';
 import type { OfficerIncident } from '../data/mockIncidents';
-import { MOCK_OFFICER_INCIDENTS } from '../data/mockIncidents';
+
 import { MOCK_RESPONSE_UNITS } from '../data/mockResponseUnits';
 import { calculateDistance } from '../utils/geo';
 
@@ -23,7 +23,7 @@ import { getOfficerName } from '../utils/auth';
 export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, onContinueToSos }: IncidentDetailProps) {
   const [incident, setIncident] = useState<OfficerIncident | null>(null);
   const [evidenceImage, setEvidenceImage] = useState<string | null>(null);
-  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+
   const [status, setStatus] = useState<'NEW' | 'PENDING ASSESSMENT' | 'ACKNOWLEDGED' | 'IN PROGRESS' | 'RESOLVED'>('NEW');
   const [dispatchState, setDispatchState] = useState<'IDLE' | 'READY'>('IDLE');
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);

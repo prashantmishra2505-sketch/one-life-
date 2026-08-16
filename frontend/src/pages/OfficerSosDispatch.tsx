@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { OfficerIncident } from '../data/mockIncidents';
-import { MOCK_OFFICER_INCIDENTS } from '../data/mockIncidents';
+
 import { MOCK_RESPONSE_UNITS } from '../data/mockResponseUnits';
 import { calculateDistance } from '../utils/geo';
 
