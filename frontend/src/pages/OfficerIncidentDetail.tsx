@@ -68,7 +68,10 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
         else if (item.status === 'resolved') setStatus('RESOLVED');
         else setStatus('NEW');
 
-        if (item.image) setEvidenceImage(item.image);
+        if (item.image) {
+          const imgUrl = item.image.startsWith('http') ? item.image : `${import.meta.env.VITE_API_URL || ''}${item.image}`;
+          setEvidenceImage(imgUrl);
+        }
         
 
       } catch (err) {
