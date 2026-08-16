@@ -69,7 +69,10 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
         else setStatus('NEW');
 
         if (item.image) {
-          const imgUrl = item.image.startsWith('http') ? item.image : `${import.meta.env.VITE_API_URL || ''}${item.image}`;
+          let imgUrl = item.image;
+          // Force https for mixed content issues
+          if (imgUrl.startsWith('http://')) imgUrl = imgUrl.replace('http://', 'https://');
+          else if (!imgUrl.startsWith('https://')) imgUrl = `${import.meta.env.VITE_API_URL || ''}${imgUrl}`;
           setEvidenceImage(imgUrl);
         }
         
