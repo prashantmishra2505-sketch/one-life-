@@ -70,10 +70,6 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
 
         if (item.image) setEvidenceImage(item.image);
         
-        setAiAnalysis({
-          confidence: item.ai_confidence,
-          removal_advice: item.ai_removal_advice
-        });
 
       } catch (err) {
         console.error("Error fetching detail", err);
