@@ -91,10 +91,12 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+db_url = os.environ.get('DATABASE_URL', 'postgresql://postgres:14427320H@localhost:5432/eco_guardian')
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'postgresql://postgres:14427320H@localhost:5432/eco_guardian'),
-        conn_max_age=600
+        default=db_url,
+        conn_max_age=int(os.environ.get('CONN_MAX_AGE', '0')),
+        ssl_require=('supabase' in db_url or os.environ.get('DB_SSL_REQUIRE', 'False') == 'True')
     )
 }
 
