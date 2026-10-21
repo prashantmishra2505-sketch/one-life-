@@ -212,7 +212,7 @@ export default function OfficerDashboard({ onSignOut, onIncidentClick }: { onSig
               zoomControl={false}
               attributionControl={false}
             >
-              <TileLayer url={tileUrl} />
+              <TileLayer url={tileUrl} maxNativeZoom={16} maxZoom={19} />
               {incidents.map(inc => (
                 <Marker 
                   key={inc.id} 

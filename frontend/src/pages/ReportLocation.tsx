@@ -200,7 +200,7 @@ export default function ReportLocation({
                     className="w-full h-full"
                     zoomControl={true}
                   >
-                    <TileLayer url={tileUrl} />
+                    <TileLayer url={tileUrl} maxNativeZoom={16} maxZoom={19} />
                     <Circle 
                       center={[location.lat, location.lng]}
                       radius={location.accuracy}

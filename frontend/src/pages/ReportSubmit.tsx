@@ -236,7 +236,7 @@ export default function ReportSubmit({
                     attributionControl={false}
                     dragging={false}
                   >
-                    <TileLayer url={tileUrl} />
+                    <TileLayer url={tileUrl} maxNativeZoom={16} maxZoom={19} />
                     {reportData.location.accuracy && (
                       <Circle 
                         center={[reportData.location.lat, reportData.location.lng]}

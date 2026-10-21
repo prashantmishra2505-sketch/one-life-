@@ -348,7 +348,7 @@ export default function OfficerIncidentDetail({ incidentId, onBack, onSignOut, o
                   zoomControl={true}
                   attributionControl={false}
                 >
-                  <TileLayer url={tileUrl} />
+                  <TileLayer url={tileUrl} maxNativeZoom={16} maxZoom={19} />
                   
                   <Circle 
                     center={incident.coords} 

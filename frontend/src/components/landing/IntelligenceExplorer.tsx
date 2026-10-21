@@ -280,7 +280,9 @@ const IntelligenceExplorer = () => {
             >
               <TileLayer
                 url={tileUrl}
-                attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+                maxNativeZoom={16}
+                maxZoom={19}
+                attribution="&copy; Esri &mdash; Esri, DeLorme, NAVTEQ"
               />
               
               <MapController selectedCoords={selectedIncident?.coords || null} />
